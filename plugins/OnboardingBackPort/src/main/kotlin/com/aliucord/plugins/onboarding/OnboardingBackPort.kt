@@ -25,16 +25,17 @@ class OnboardingBackPort : Plugin() {
                 )
             }
 
-            // FIX: Use mainThread.post instead of threadPool.execute for UI operations
-            com.aliucord.Utils.mainThread.post {
+            // FIX: Added a 500ms delay. This prevents Discord's chat refresh 
+            // from instantly dismissing the BottomSheet.
+            com.aliucord.Utils.mainThread.postDelayed({
                 try {
                     val bottomSheet = OnboardingBottomSheet(guildId.toString())
                     val fragmentManager = com.aliucord.Utils.appActivity.supportFragmentManager
                     bottomSheet.show(fragmentManager, "OnboardingUI")
-                } catch (e: Exception) {
-                    com.aliucord.Utils.showToast("Error opening UI: ${e.message}")
+                } catch (e: Throwable) {
+                    com.aliucord.Utils.showToast("UI Error: ${e.message}")
                 }
-            }
+            }, 500)
 
             CommandsAPI.CommandResult("Opening Onboarding UI...", null, false)
         }
