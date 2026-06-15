@@ -1,7 +1,6 @@
 package com.aliucord.plugins.onboarding
 
 import android.content.Context
-import android.os.Bundle
 import com.aliucord.annotations.AliucordPlugin
 import com.aliucord.api.CommandsAPI
 import com.aliucord.entities.Plugin
@@ -26,13 +25,11 @@ class OnboardingBackPort : Plugin() {
                 )
             }
 
+            // 1 Second delay for safety against Discord Chat refresh
             com.aliucord.Utils.mainThread.postDelayed({
                 try {
-                    val bottomSheet = OnboardingBottomSheet().apply {
-                        arguments = Bundle().apply {
-                            putString("guildId", guildId.toString())
-                        }
-                    }
+                    // Passing guildId directly, no complex Bundle stuff
+                    val bottomSheet = OnboardingBottomSheet(guildId.toString())
                     bottomSheet.show(com.aliucord.Utils.appActivity.supportFragmentManager, "OnboardingUI")
                 } catch (e: Throwable) {
                     com.aliucord.Utils.showToast("Crash: ${e.message}")

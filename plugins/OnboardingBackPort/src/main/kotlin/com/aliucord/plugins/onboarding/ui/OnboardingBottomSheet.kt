@@ -16,56 +16,61 @@ import com.aliucord.plugins.onboarding.models.OnboardingResponse
 import com.aliucord.plugins.onboarding.models.SubmitOnboardingRequest
 import com.aliucord.widgets.BottomSheet
 
-class OnboardingBottomSheet : BottomSheet() {
+// FIX: Tells Android to allow our custom parameter
+@SuppressLint("ValidFragment", "SetTextI18n")
+class OnboardingBottomSheet(private val guildId: String) : BottomSheet() {
 
     private lateinit var container: LinearLayout
     private lateinit var loadingIndicator: ProgressBar
     private val selectedOptionIds = mutableSetOf<String>()
 
-    @SuppressLint("SetTextI18n")
     override fun onViewCreated(view: View, bundle: Bundle?) {
         super.onViewCreated(view, bundle)
 
-        val guildId = arguments?.getString("guildId") ?: return
-        val ctx = view.context
+        try {
+            val ctx = view.context
 
-        container = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            layoutParams = android.view.ViewGroup.LayoutParams(
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-            setPadding(50, 50, 50, 50)
-            setBackgroundColor(Color.parseColor("#2B2D31")) 
-        }
-
-        loadingIndicator = ProgressBar(ctx).apply {
-            isIndeterminate = true
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                gravity = Gravity.CENTER
-                setMargins(0, 50, 0, 50)
+            container = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = android.view.ViewGroup.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+                setPadding(50, 50, 50, 50)
+                setBackgroundColor(Color.parseColor("#2B2D31")) 
             }
+
+            loadingIndicator = ProgressBar(ctx).apply {
+                isIndeterminate = true
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    gravity = Gravity.CENTER
+                    setMargins(0, 50, 0, 50)
+                }
+            }
+
+            val titleText = TextView(ctx).apply {
+                text = "Loading Server Onboarding..."
+                textSize = 18f
+                setTextColor(Color.WHITE)
+                gravity = Gravity.CENTER
+                setPadding(0, 0, 0, 30)
+            }
+
+            container.addView(titleText)
+            container.addView(loadingIndicator)
+            addView(container)
+
+            fetchOnboardingData()
+
+        } catch (e: Throwable) {
+            Utils.showToast("UI Setup Error: ${e.message}")
         }
-
-        val titleText = TextView(ctx).apply {
-            text = "Loading Server Onboarding..."
-            textSize = 18f
-            setTextColor(Color.WHITE)
-            gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 30)
-        }
-
-        container.addView(titleText)
-        container.addView(loadingIndicator)
-        addView(container)
-
-        fetchOnboardingData(guildId)
     }
 
-    private fun fetchOnboardingData(guildId: String) {
+    private fun fetchOnboardingData() {
         Utils.threadPool.execute {
             try {
                 if (guildId.isEmpty()) return@execute
@@ -89,7 +94,7 @@ class OnboardingBottomSheet : BottomSheet() {
                 }
             } catch (e: Exception) {
                 Utils.mainThread.post {
-                    showError("Error: ${e.message}")
+                    showError("API Error: ${e.message}")
                 }
             }
         }
@@ -107,8 +112,9 @@ class OnboardingBottomSheet : BottomSheet() {
         }
         container.addView(header)
 
-        data.prompts.forEach { prompt ->
-            if (!prompt.in_onboarding) return@forEach
+        // Used safe calls (?.) to prevent Gson mapping crashes
+        data.prompts?.forEach { prompt ->
+            if (prompt.in_onboarding != true) return@forEach
 
             val promptTitle = TextView(context).apply {
                 text = prompt.title + if (prompt.required) " *" else ""
@@ -119,7 +125,7 @@ class OnboardingBottomSheet : BottomSheet() {
             }
             container.addView(promptTitle)
 
-            prompt.options.forEach { option ->
+            prompt.options?.forEach { option ->
                 val checkBox = CheckBox(context).apply {
                     text = option.title
                     textSize = 15f
