@@ -64,8 +64,8 @@ class OnboardingBottomSheet(private val guildId: String) : BottomSheet() {
                 val request = Http.Request.newDiscordRequest("/guilds/$guildId/onboarding")
                 val response = request.execute()
 
-                // FIX: Changed response.code() to response.code
-                if (response.code == 200) {
+                // FIX: Used Aliucord's property 'statusCode' instead of 'code()'
+                if (response.statusCode == 200) {
                     val data = response.json(OnboardingResponse::class.java)
                     Utils.mainThread.post {
                         if (data != null && data.enabled) {
@@ -76,7 +76,7 @@ class OnboardingBottomSheet(private val guildId: String) : BottomSheet() {
                     }
                 } else {
                     Utils.mainThread.post {
-                        showError("Failed to fetch data. Error Code: ${response.code}")
+                        showError("Failed to fetch data. Error Code: ${response.statusCode}")
                     }
                 }
             } catch (e: Exception) {
@@ -127,7 +127,6 @@ class OnboardingBottomSheet(private val guildId: String) : BottomSheet() {
             }
         }
 
-        // FIX: Using standard android.widget.Button to fix "Unresolved reference Button"
         val submitButton = android.widget.Button(context).apply {
             text = "Finish"
             layoutParams = LinearLayout.LayoutParams(
@@ -155,24 +154,17 @@ class OnboardingBottomSheet(private val guildId: String) : BottomSheet() {
             try {
                 val request = Http.Request.newDiscordRequest("/guilds/$guildId/onboarding-responses")
                 
-                // FIX: Setting method as a property, not a function
-                request.method = "POST"
-
-                // FIX: Using executeWithJson safely via reflection to ensure zero compile errors 
-                // in case Aliucord's internal HTTP wrapper structure varies slightly.
-                try {
-                    request.javaClass.getMethod("executeWithJson", Any::class.java).invoke(request, payload)
-                } catch (e: Exception) {
-                    try {
-                        request.javaClass.getMethod("executeWithBody", String::class.java).invoke(request, Utils.gson.toJson(payload))
-                    } catch (e2: Exception) {
-                        request.execute() // Ultimate fallback
-                    }
-                }
+                // FIX: Used the native Aliucord method to send a JSON POST request. 
+                // Removed the unresolved 'method' and 'gson' hacks.
+                val response = request.executeWithJson(payload)
 
                 Utils.mainThread.post {
-                    Utils.showToast("Onboarding Completed!")
-                    dismiss()
+                    if (response.statusCode in 200..299) {
+                        Utils.showToast("Onboarding Completed!")
+                        dismiss()
+                    } else {
+                        Utils.showToast("Submission failed. Code: ${response.statusCode}")
+                    }
                 }
             } catch (e: Exception) {
                 Utils.mainThread.post {
