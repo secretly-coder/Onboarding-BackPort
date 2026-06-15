@@ -10,7 +10,6 @@ import com.aliucord.plugins.onboarding.ui.OnboardingBottomSheet
 class OnboardingBackPort : Plugin() {
 
     override fun start(context: Context) {
-        // Registering a chat command to trigger the onboarding UI manually for testing
         commands.registerCommand(
             "testonboarding",
             "Test the Custom Onboarding UI for the current server",
@@ -26,10 +25,11 @@ class OnboardingBackPort : Plugin() {
                 )
             }
 
-            // Open the BottomSheet on the main thread
             com.aliucord.Utils.threadPool.execute {
                 val bottomSheet = OnboardingBottomSheet(guildId.toString())
-                bottomSheet.show(ctx.parent.parentFragmentManager, "OnboardingUI")
+                // FIX: Used the correct FragmentManager for Aliucord
+                val fragmentManager = com.aliucord.Utils.appActivity.supportFragmentManager
+                bottomSheet.show(fragmentManager, "OnboardingUI")
             }
 
             CommandsAPI.CommandResult("Opening Onboarding UI...", null, false)
