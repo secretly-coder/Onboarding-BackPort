@@ -16,10 +16,8 @@ import com.aliucord.plugins.onboarding.models.OnboardingResponse
 import com.aliucord.plugins.onboarding.models.SubmitOnboardingRequest
 import com.aliucord.widgets.BottomSheet
 
-// FIX: Added a default constructor so Android doesn't swallow/block the fragment
-class OnboardingBottomSheet(private val guildId: String) : BottomSheet() {
-
-    constructor() : this("") 
+// FIX: Cleaned class definition with NO custom constructor
+class OnboardingBottomSheet : BottomSheet() {
 
     private lateinit var container: LinearLayout
     private lateinit var loadingIndicator: ProgressBar
@@ -31,6 +29,9 @@ class OnboardingBottomSheet(private val guildId: String) : BottomSheet() {
 
         Utils.showToast("3. BottomSheet Created!")
 
+        // FIX: Safely retrieve the guildId from the arguments bundle
+        val guildId = arguments?.getString("guildId") ?: return
+
         val ctx = view.context
 
         container = LinearLayout(ctx).apply {
@@ -40,7 +41,6 @@ class OnboardingBottomSheet(private val guildId: String) : BottomSheet() {
                 android.view.ViewGroup.LayoutParams.WRAP_CONTENT
             )
             setPadding(50, 50, 50, 50)
-            // Forcing a dark background to guarantee visibility of white text
             setBackgroundColor(Color.parseColor("#2B2D31")) 
         }
 
@@ -58,7 +58,7 @@ class OnboardingBottomSheet(private val guildId: String) : BottomSheet() {
         val titleText = TextView(ctx).apply {
             text = "Loading Server Onboarding..."
             textSize = 18f
-            setTextColor(Color.WHITE) // FIX: Forced white text
+            setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             setPadding(0, 0, 0, 30)
         }
@@ -67,10 +67,11 @@ class OnboardingBottomSheet(private val guildId: String) : BottomSheet() {
         container.addView(loadingIndicator)
         addView(container)
 
-        fetchOnboardingData()
+        fetchOnboardingData(guildId)
     }
 
-    private fun fetchOnboardingData() {
+    // FIX: Passed guildId as a direct parameter to the fetch function
+    private fun fetchOnboardingData(guildId: String) {
         Utils.threadPool.execute {
             try {
                 if (guildId.isEmpty()) return@execute

@@ -29,8 +29,15 @@ class OnboardingBackPort : Plugin() {
                 try {
                     com.aliucord.Utils.showToast("1. Triggering UI...")
                     
-                    val bottomSheet = OnboardingBottomSheet(guildId.toString())
-                    bottomSheet.show(com.aliucord.Utils.appActivity.supportFragmentManager, "OnboardingUI")
+                    // FIX: Using the bulletproof Android Bundle method to pass data
+                    val bottomSheet = OnboardingBottomSheet().apply {
+                        arguments = android.os.Bundle().apply {
+                            putString("guildId", guildId.toString())
+                        }
+                    }
+                    
+                    // FIX: Using showNow() forces synchronous execution, preventing drops
+                    bottomSheet.showNow(com.aliucord.Utils.appActivity.supportFragmentManager, "OnboardingUI")
                     
                     com.aliucord.Utils.showToast("2. UI Show Commanded!")
                 } catch (e: Throwable) {
