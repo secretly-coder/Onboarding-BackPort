@@ -77,10 +77,11 @@ class OnboardingBottomSheet : BottomSheet() {
                 if (response.statusCode == 200) {
                     val data = response.json(OnboardingResponse::class.java)
                     Utils.mainThread.post {
-                        if (data != null && data.prompts != null) {
+                        // FIX: Strictly verify if enabled is TRUE and prompts are NOT empty
+                        if (data != null && data.enabled == true && !data.prompts.isNullOrEmpty()) {
                             renderOnboardingUI(data)
                         } else {
-                            showError("Onboarding data is empty or invalid.")
+                            showError("Onboarding is disabled or not fully setup for this server.")
                         }
                     }
                 } else {
@@ -122,13 +123,10 @@ class OnboardingBottomSheet : BottomSheet() {
                 var customEmojiId: String? = null
                 var baseText = option.title ?: "Option"
 
-                // Check emoji type
                 if (emojiObj != null) {
                     if (emojiObj.id == null && emojiObj.name != null) {
-                        // Unicode Emoji (like 🔥)
                         baseText = "${emojiObj.name} $baseText"
                     } else if (emojiObj.id != null) {
-                        // Custom Discord Emoji
                         customEmojiId = emojiObj.id
                     }
                 }
@@ -149,11 +147,9 @@ class OnboardingBottomSheet : BottomSheet() {
                 }
                 container.addView(checkBox)
 
-                // Background Custom Emoji Downloader
                 if (customEmojiId != null) {
                     Utils.threadPool.execute {
                         try {
-                            // PNG works for both static and getting the first frame of GIFs
                             val url = "https://cdn.discordapp.com/emojis/$customEmojiId.png?size=64"
                             val stream = java.net.URL(url).openStream()
                             val bitmap = android.graphics.BitmapFactory.decodeStream(stream)
@@ -162,19 +158,15 @@ class OnboardingBottomSheet : BottomSheet() {
                                 Utils.mainThread.post {
                                     try {
                                         val drawable = android.graphics.drawable.BitmapDrawable(context?.resources, bitmap)
-                                        // Scale it perfectly to match the text size
                                         val size = (20f * (context?.resources?.displayMetrics?.density ?: 2f)).toInt()
                                         drawable.setBounds(0, 0, size, size)
                                         
-                                        // Add emoji image between the CheckBox and the Text
                                         checkBox.setCompoundDrawables(drawable, null, null, null)
                                         checkBox.compoundDrawablePadding = 20
                                     } catch (e: Exception) {}
                                 }
                             }
-                        } catch (e: Exception) {
-                            // Ignore missing emojis silently
-                        }
+                        } catch (e: Exception) {}
                     }
                 }
             }
@@ -203,17 +195,13 @@ class OnboardingBottomSheet : BottomSheet() {
                 val payload = SubmitOnboardingRequest(selectedOptionIds.toList(), emptyMap(), emptyMap())
                 val request = Http.Request.newDiscordRequest("/guilds/$guildId/onboarding-responses")
                 
-                // --- THE POST HACK ---
-                // Safely forcing the connection into POST mode to fix the Crash
                 try {
                     val connField = request.javaClass.getDeclaredField("conn")
                     connField.isAccessible = true
                     val conn = connField.get(request) as java.net.HttpURLConnection
                     conn.requestMethod = "POST"
                     conn.doOutput = true
-                } catch (e: Exception) {
-                    // Fallback, just in case
-                }
+                } catch (e: Exception) {}
 
                 val response = request.executeWithJson(payload)
 
