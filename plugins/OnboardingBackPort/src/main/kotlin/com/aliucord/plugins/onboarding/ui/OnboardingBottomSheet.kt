@@ -1,6 +1,5 @@
 package com.aliucord.plugins.onboarding.ui
 
-import android.annotation.SuppressLint
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
@@ -16,13 +15,13 @@ import com.aliucord.plugins.onboarding.models.OnboardingResponse
 import com.aliucord.plugins.onboarding.models.SubmitOnboardingRequest
 import com.aliucord.widgets.BottomSheet
 
-// FIX: Tells Android to allow our custom parameter
-@SuppressLint("ValidFragment", "SetTextI18n")
-class OnboardingBottomSheet(private val guildId: String) : BottomSheet() {
+// ZERO constructor parameters. Android will never reject this.
+class OnboardingBottomSheet : BottomSheet() {
 
+    // The data is passed here right before showing the UI
+    var targetGuildId: String = "" 
+    
     private lateinit var container: LinearLayout
-    private lateinit var loadingIndicator: ProgressBar
-    private val selectedOptionIds = mutableSetOf<String>()
 
     override fun onViewCreated(view: View, bundle: Bundle?) {
         super.onViewCreated(view, bundle)
@@ -32,23 +31,8 @@ class OnboardingBottomSheet(private val guildId: String) : BottomSheet() {
 
             container = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
-                layoutParams = android.view.ViewGroup.LayoutParams(
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-                )
                 setPadding(50, 50, 50, 50)
                 setBackgroundColor(Color.parseColor("#2B2D31")) 
-            }
-
-            loadingIndicator = ProgressBar(ctx).apply {
-                isIndeterminate = true
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply {
-                    gravity = Gravity.CENTER
-                    setMargins(0, 50, 0, 50)
-                }
             }
 
             val titleText = TextView(ctx).apply {
@@ -59,43 +43,49 @@ class OnboardingBottomSheet(private val guildId: String) : BottomSheet() {
                 setPadding(0, 0, 0, 30)
             }
 
+            val loadingIndicator = ProgressBar(ctx).apply {
+                isIndeterminate = true
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    gravity = Gravity.CENTER
+                }
+            }
+
             container.addView(titleText)
             container.addView(loadingIndicator)
             addView(container)
 
-            fetchOnboardingData()
+            if (targetGuildId.isNotEmpty()) {
+                fetchOnboardingData()
+            } else {
+                titleText.text = "Error: Target Guild ID is missing."
+                container.removeView(loadingIndicator)
+            }
 
         } catch (e: Throwable) {
-            Utils.showToast("UI Setup Error: ${e.message}")
+            Utils.showToast("Setup Error: ${e.message}")
         }
     }
 
     private fun fetchOnboardingData() {
         Utils.threadPool.execute {
             try {
-                if (guildId.isEmpty()) return@execute
-                
-                val request = Http.Request.newDiscordRequest("/guilds/$guildId/onboarding")
+                val request = Http.Request.newDiscordRequest("/guilds/$targetGuildId/onboarding")
                 val response = request.execute()
 
                 if (response.statusCode == 200) {
                     val data = response.json(OnboardingResponse::class.java)
                     Utils.mainThread.post {
-                        if (data != null && data.enabled) {
-                            renderOnboardingUI(data)
-                        } else {
-                            showError("Onboarding is not enabled for this server.")
-                        }
+                        if (data != null && data.enabled) renderOnboardingUI(data)
+                        else showError("Onboarding is not enabled for this server.")
                     }
                 } else {
-                    Utils.mainThread.post {
-                        showError("Failed to fetch data. Error Code: ${response.statusCode}")
-                    }
+                    Utils.mainThread.post { showError("Failed to fetch. Code: ${response.statusCode}") }
                 }
             } catch (e: Exception) {
-                Utils.mainThread.post {
-                    showError("API Error: ${e.message}")
-                }
+                Utils.mainThread.post { showError("API Error: ${e.message}") }
             }
         }
     }
@@ -112,7 +102,8 @@ class OnboardingBottomSheet(private val guildId: String) : BottomSheet() {
         }
         container.addView(header)
 
-        // Used safe calls (?.) to prevent Gson mapping crashes
+        val selectedOptionIds = mutableSetOf<String>()
+
         data.prompts?.forEach { prompt ->
             if (prompt.in_onboarding != true) return@forEach
 
@@ -133,11 +124,8 @@ class OnboardingBottomSheet(private val guildId: String) : BottomSheet() {
                     setPadding(10, 10, 10, 10)
 
                     setOnCheckedChangeListener { _, isChecked ->
-                        if (isChecked) {
-                            selectedOptionIds.add(option.id)
-                        } else {
-                            selectedOptionIds.remove(option.id)
-                        }
+                        if (isChecked) selectedOptionIds.add(option.id)
+                        else selectedOptionIds.remove(option.id)
                     }
                 }
                 container.addView(checkBox)
@@ -150,26 +138,18 @@ class OnboardingBottomSheet(private val guildId: String) : BottomSheet() {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                setMargins(0, 60, 0, 20)
-            }
-            setOnClickListener {
-                submitAnswers(data.guild_id)
-            }
+            ).apply { setMargins(0, 60, 0, 20) }
+            
+            setOnClickListener { submitAnswers(data.guild_id, selectedOptionIds) }
         }
 
         container.addView(submitButton)
     }
 
-    private fun submitAnswers(guildId: String) {
-        val payload = SubmitOnboardingRequest(
-            onboarding_responses = selectedOptionIds.toList(),
-            onboarding_prompts_seen = emptyMap(),
-            onboarding_responses_seen = emptyMap()
-        )
-
+    private fun submitAnswers(guildId: String, selectedOptionIds: Set<String>) {
         Utils.threadPool.execute {
             try {
+                val payload = SubmitOnboardingRequest(selectedOptionIds.toList(), emptyMap(), emptyMap())
                 val request = Http.Request.newDiscordRequest("/guilds/$guildId/onboarding-responses")
                 val response = request.executeWithJson(payload)
 
@@ -177,14 +157,10 @@ class OnboardingBottomSheet(private val guildId: String) : BottomSheet() {
                     if (response.statusCode in 200..299) {
                         Utils.showToast("Onboarding Completed!")
                         dismiss()
-                    } else {
-                        Utils.showToast("Submission failed. Code: ${response.statusCode}")
-                    }
+                    } else Utils.showToast("Submission failed. Code: ${response.statusCode}")
                 }
             } catch (e: Exception) {
-                Utils.mainThread.post {
-                    Utils.showToast("Network error during submission.")
-                }
+                Utils.mainThread.post { Utils.showToast("Network error during submission.") }
             }
         }
     }
@@ -195,7 +171,6 @@ class OnboardingBottomSheet(private val guildId: String) : BottomSheet() {
             text = message
             setTextColor(Color.RED)
             gravity = Gravity.CENTER
-            setPadding(0, 50, 0, 0)
         }
         container.addView(errorText)
     }

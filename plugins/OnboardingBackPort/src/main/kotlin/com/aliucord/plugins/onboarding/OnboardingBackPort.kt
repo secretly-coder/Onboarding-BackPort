@@ -18,25 +18,25 @@ class OnboardingBackPort : Plugin() {
             val guildId = ctx.channel?.let { it.guildId }
             
             if (guildId == null || guildId == 0L) {
-                return@registerCommand CommandsAPI.CommandResult(
-                    "You must use this command inside a server.",
-                    null,
-                    false
-                )
+                return@registerCommand CommandsAPI.CommandResult("Not in a server", null, false)
             }
 
-            // 1 Second delay for safety against Discord Chat refresh
+            // 1.5s delay ensures keyboard closing animation doesn't kill our UI
             com.aliucord.Utils.mainThread.postDelayed({
                 try {
-                    // Passing guildId directly, no complex Bundle stuff
-                    val bottomSheet = OnboardingBottomSheet(guildId.toString())
+                    // ZERO parameter constructor. 100% Android compliant.
+                    val bottomSheet = OnboardingBottomSheet() 
+                    
+                    // Passing data directly to the property
+                    bottomSheet.targetGuildId = guildId.toString() 
+                    
                     bottomSheet.show(com.aliucord.Utils.appActivity.supportFragmentManager, "OnboardingUI")
                 } catch (e: Throwable) {
-                    com.aliucord.Utils.showToast("Crash: ${e.message}")
+                    com.aliucord.Utils.showToast("Launch Error: ${e.message}")
                 }
-            }, 1000)
+            }, 1500)
 
-            CommandsAPI.CommandResult("Opening Onboarding UI...", null, false)
+            CommandsAPI.CommandResult("Opening Onboarding in 1.5s...", null, false)
         }
     }
 
