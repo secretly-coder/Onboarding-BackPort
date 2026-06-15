@@ -1,5 +1,4 @@
-package com.aliucord.plugins.onboarding.ui
-
+package com.aliucord.plugins.onboarding
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
@@ -14,7 +13,6 @@ import com.aliucord.Utils
 import com.aliucord.plugins.onboarding.models.OnboardingResponse
 import com.aliucord.plugins.onboarding.models.SubmitOnboardingRequest
 import com.aliucord.widgets.BottomSheet
-
 class OnboardingBottomSheet : BottomSheet() {
 
     var targetGuildId: String = "" 
