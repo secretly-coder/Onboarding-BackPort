@@ -17,8 +17,8 @@ subprojects {
     }
 
     configure<LibraryExtension> {
-        // TODO: Change to your package name
-        namespace = "com.github.yournamehere"
+        // Updated package namespace
+        namespace = "com.aliucord.plugins"
         compileSdk = 36
 
         defaultConfig {
@@ -37,11 +37,11 @@ subprojects {
     }
 
     configure<AliucordExtension> {
-        // TODO: Change to your name and user ID
-        author("yournamehere", 0L, hyperlink = true)
+        // Updated to your brand name
+        author("Ribro", 0L, hyperlink = true)
 
-        // TODO: Change to your repository
-        github("https://github.com/Aliucord/plugins-template")
+        // Updated to your actual GitHub repository
+        github("https://github.com/secretly-coder/Onboarding-BackPort")
     }
 
     configure<KtlintExtension> {
