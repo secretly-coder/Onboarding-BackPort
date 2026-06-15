@@ -113,26 +113,28 @@ class OnboardingBottomSheet : BottomSheet() {
                 textSize = 16f
                 setTextColor(Color.WHITE)
                 typeface = Typeface.DEFAULT_BOLD
-                setPadding(0, 30, 0, 10)
+                setPadding(0, 40, 0, 15)
             }
             container.addView(promptTitle)
 
             prompt.options?.forEach { option ->
-                
-                // NEW: EMOJI PARSING LOGIC
-                var emojiStr = ""
                 val emojiObj = option.emoji
-                if (emojiObj != null && emojiObj.name != null) {
-                    emojiStr = if (emojiObj.id == null) {
-                        "${emojiObj.name} " // Normal Unicode emoji
-                    } else {
-                        ":${emojiObj.name}: " // Custom server emoji
+                var customEmojiId: String? = null
+                var baseText = option.title ?: "Option"
+
+                // Check emoji type
+                if (emojiObj != null) {
+                    if (emojiObj.id == null && emojiObj.name != null) {
+                        // Unicode Emoji (like 🔥)
+                        baseText = "${emojiObj.name} $baseText"
+                    } else if (emojiObj.id != null) {
+                        // Custom Discord Emoji
+                        customEmojiId = emojiObj.id
                     }
                 }
 
                 val checkBox = CheckBox(context).apply {
-                    // Applied emoji to the text
-                    text = emojiStr + (option.title ?: "Option")
+                    text = baseText
                     textSize = 15f
                     setTextColor(Color.LTGRAY)
                     setPadding(10, 10, 10, 10)
@@ -146,6 +148,35 @@ class OnboardingBottomSheet : BottomSheet() {
                     }
                 }
                 container.addView(checkBox)
+
+                // Background Custom Emoji Downloader
+                if (customEmojiId != null) {
+                    Utils.threadPool.execute {
+                        try {
+                            // PNG works for both static and getting the first frame of GIFs
+                            val url = "https://cdn.discordapp.com/emojis/$customEmojiId.png?size=64"
+                            val stream = java.net.URL(url).openStream()
+                            val bitmap = android.graphics.BitmapFactory.decodeStream(stream)
+                            
+                            if (bitmap != null) {
+                                Utils.mainThread.post {
+                                    try {
+                                        val drawable = android.graphics.drawable.BitmapDrawable(context?.resources, bitmap)
+                                        // Scale it perfectly to match the text size
+                                        val size = (20f * (context?.resources?.displayMetrics?.density ?: 2f)).toInt()
+                                        drawable.setBounds(0, 0, size, size)
+                                        
+                                        // Add emoji image between the CheckBox and the Text
+                                        checkBox.setCompoundDrawables(drawable, null, null, null)
+                                        checkBox.compoundDrawablePadding = 20
+                                    } catch (e: Exception) {}
+                                }
+                            }
+                        } catch (e: Exception) {
+                            // Ignore missing emojis silently
+                        }
+                    }
+                }
             }
         }
 
@@ -171,6 +202,19 @@ class OnboardingBottomSheet : BottomSheet() {
             try {
                 val payload = SubmitOnboardingRequest(selectedOptionIds.toList(), emptyMap(), emptyMap())
                 val request = Http.Request.newDiscordRequest("/guilds/$guildId/onboarding-responses")
+                
+                // --- THE POST HACK ---
+                // Safely forcing the connection into POST mode to fix the Crash
+                try {
+                    val connField = request.javaClass.getDeclaredField("conn")
+                    connField.isAccessible = true
+                    val conn = connField.get(request) as java.net.HttpURLConnection
+                    conn.requestMethod = "POST"
+                    conn.doOutput = true
+                } catch (e: Exception) {
+                    // Fallback, just in case
+                }
+
                 val response = request.executeWithJson(payload)
 
                 Utils.mainThread.post {
@@ -178,13 +222,11 @@ class OnboardingBottomSheet : BottomSheet() {
                         Utils.showToast("Onboarding Completed!")
                         dismiss()
                     } else {
-                        // NEW: Exposing the exact error Discord throws at us
-                        val errorText = response.text()?.take(100) ?: "Unknown Reason"
+                        val errorText = response.text()?.take(100) ?: "Unknown Error"
                         Utils.showToast("Failed Code ${response.statusCode}: $errorText")
                     }
                 }
             } catch (e: Throwable) {
-                // NEW: Exposing internal Android/Aliucord wrapper errors
                 Utils.mainThread.post { Utils.showToast("Crash Error: ${e.message}") }
             }
         }
