@@ -1,32 +1,13 @@
-@file:Suppress("UnstableApiUsage")
-
-pluginManagement {
-    repositories {
-        google()
-        gradlePluginPortal()
-        maven {
-            name = "aliucord"
-            url = uri("https://maven.aliucord.com/releases")
-        }
-    }
+plugins {
+    id("com.aliucord.gradle.plugin") version "0.2.1"
 }
 
-dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-    repositories {
-        google()
-        mavenCentral()
-        maven {
-            name = "aliucord"
-            url = uri("https://maven.aliucord.com/releases")
-        }
-    }
+aliucord {
+    pluginName.set("OnboardingBackPort")
+    description.set("Backports Discord's server onboarding feature to Aliucord.")
+    authors.add("Ribro")
 }
 
-rootProject.name = "aliucord-plugins"
-include(":plugins")
-
-// Add each directory under ./plugins as a separate project
-rootDir.resolve("plugins")
-    .listFiles { file -> file.isDirectory && file.resolve("build.gradle.kts").exists() }!!
-    .forEach { include(":plugins:${it.name}") }
+dependencies {
+    // Nope
+}
