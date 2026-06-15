@@ -8,7 +8,8 @@ import com.aliucord.Utils
 import com.aliucord.annotations.AliucordPlugin
 import com.aliucord.api.CommandsAPI
 import com.aliucord.entities.Plugin
-import com.aliucord.patcher.PinePatchFn
+// FIX: Using the correct Aliucord Hook class instead of PinePatchFn
+import com.aliucord.patcher.Hook
 import com.aliucord.plugins.onboarding.models.OnboardingResponse
 import com.aliucord.plugins.onboarding.ui.OnboardingBottomSheet
 
@@ -16,7 +17,7 @@ import com.aliucord.plugins.onboarding.ui.OnboardingBottomSheet
 class OnboardingBackPort : Plugin() {
 
     override fun start(context: Context) {
-        // 1. Manual Command (Testing ke liye rakha hai, just in case)
+        // 1. Manual Command (Testing ke liye)
         commands.registerCommand(
             "testonboarding",
             "Manually force open Onboarding UI",
@@ -44,9 +45,10 @@ class OnboardingBackPort : Plugin() {
         try {
             val widgetClass = Class.forName("com.discord.widgets.channels.list.WidgetChannelsList")
             
+            // FIX: Replaced PinePatchFn with Hook
             patcher.patch(
                 widgetClass.getDeclaredMethod("onViewCreated", View::class.java, Bundle::class.java),
-                PinePatchFn {
+                Hook { _ ->
                     Utils.threadPool.execute {
                         try {
                             // Current Server ID nikalna
@@ -66,14 +68,14 @@ class OnboardingBackPort : Plugin() {
                                     checkedGuilds.add(guildId)
                                     settings.setString("checked_guilds", checkedGuilds.joinToString(","))
 
-                                    // Chup-chaap Background API check (No loading screens)
+                                    // Chup-chaap Background API check
                                     val request = Http.Request.newDiscordRequest("/guilds/$guildId/onboarding")
                                     val response = request.execute()
 
                                     if (response.statusCode == 200) {
                                         val data = response.json(OnboardingResponse::class.java)
                                         
-                                        // Agar onboarding ON hai, toh BHOOM! Popup karo!
+                                        // Agar onboarding ON hai, toh popup karo
                                         if (data != null && data.enabled == true) {
                                             Utils.mainThread.postDelayed({
                                                 try {
@@ -81,7 +83,7 @@ class OnboardingBackPort : Plugin() {
                                                     bottomSheet.targetGuildId = guildId
                                                     bottomSheet.show(Utils.appActivity.supportFragmentManager, "OnboardingUI")
                                                 } catch (e: Throwable) {}
-                                            }, 1500) // Delay taaki chat aaram se load ho jaye
+                                            }, 1500)
                                         }
                                     }
                                 }
