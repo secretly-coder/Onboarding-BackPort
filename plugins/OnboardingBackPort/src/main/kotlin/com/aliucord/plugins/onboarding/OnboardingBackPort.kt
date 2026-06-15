@@ -17,7 +17,7 @@ class OnboardingBackPort : Plugin() {
 
     override fun start(context: Context) {
         
-        // 1. Manual Command (Fallback ke liye)
+        // 1. Manual Command
         commands.registerCommand(
             "testonboarding",
             "Manually force open Onboarding UI",
@@ -36,70 +36,61 @@ class OnboardingBackPort : Plugin() {
                 } catch (e: Throwable) {
                     com.aliucord.Utils.showToast("Launch Error: ${e.message}")
                 }
-            }, 1500)
+            }, 1000)
 
             CommandsAPI.CommandResult("Opening Onboarding...", null, false)
         }
 
-        // 2. SMARTER AUTO-POPUP MAGIC
+        // 2. UNBREAKABLE AUTO-POPUP MAGIC
         try {
-            val widgetClass = Class.forName("com.discord.widgets.channels.list.WidgetChannelsList")
+            // WidgetChatList is the most stable core class in Discord Android
+            val chatListClass = Class.forName("com.discord.widgets.chat.list.WidgetChatList")
             
-            // FIX: Dynamically find the right UI method to hook so it never throws NoSuchMethodException
-            val targetMethod = widgetClass.declaredMethods.firstOrNull { 
-                it.name == "onViewBound" || it.name == "configureUI" || it.name == "onResume" 
-            }
+            patcher.patch(
+                chatListClass.getDeclaredMethod("onViewCreated", View::class.java, Bundle::class.java),
+                Hook { _ ->
+                    Utils.threadPool.execute {
+                        try {
+                            val storeStreamClass = Class.forName("com.discord.stores.StoreStream")
+                            val storeGuildSelected = storeStreamClass.getMethod("getGuildSelected").invoke(null)
+                            val guildIdLong = storeGuildSelected.javaClass.getMethod("get").invoke(storeGuildSelected) as Long
+                            val guildId = guildIdLong.toString()
 
-            if (targetMethod != null) {
-                patcher.patch(
-                    targetMethod,
-                    Hook { _ ->
-                        Utils.threadPool.execute {
-                            try {
-                                val storeStreamClass = Class.forName("com.discord.stores.StoreStream")
-                                val storeGuildSelected = storeStreamClass.getMethod("getGuildSelected").invoke(null)
-                                val guildIdLong = storeGuildSelected.javaClass.getMethod("get").invoke(storeGuildSelected) as Long
-                                val guildId = guildIdLong.toString()
+                            if (guildId != "0" && guildId.isNotEmpty()) {
+                                
+                                val checkedStr = settings.getString("checked_guilds", "")
+                                val checkedGuilds = checkedStr.split(",").filter { it.isNotEmpty() }.toMutableSet()
+                                
+                                if (!checkedGuilds.contains(guildId)) {
+                                    checkedGuilds.add(guildId)
+                                    settings.setString("checked_guilds", checkedGuilds.joinToString(","))
 
-                                if (guildId != "0" && guildId.isNotEmpty()) {
-                                    
-                                    val checkedStr = settings.getString("checked_guilds", "")
-                                    val checkedGuilds = checkedStr.split(",").filter { it.isNotEmpty() }.toMutableSet()
-                                    
-                                    if (!checkedGuilds.contains(guildId)) {
-                                        checkedGuilds.add(guildId)
-                                        settings.setString("checked_guilds", checkedGuilds.joinToString(","))
+                                    val request = Http.Request.newDiscordRequest("/guilds/$guildId/onboarding")
+                                    val response = request.execute()
 
-                                        val request = Http.Request.newDiscordRequest("/guilds/$guildId/onboarding")
-                                        val response = request.execute()
-
-                                        if (response.statusCode == 200) {
-                                            val data = response.json(OnboardingResponse::class.java)
-                                            
-                                            // Extra safe check before Auto-popping
-                                            if (data != null && data.enabled == true && !data.prompts.isNullOrEmpty()) {
-                                                Utils.mainThread.postDelayed({
-                                                    try {
-                                                        val bottomSheet = OnboardingBottomSheet()
-                                                        bottomSheet.targetGuildId = guildId
-                                                        bottomSheet.show(Utils.appActivity.supportFragmentManager, "OnboardingUI")
-                                                    } catch (e: Throwable) {}
-                                                }, 1500)
-                                            }
+                                    if (response.statusCode == 200) {
+                                        val data = response.json(OnboardingResponse::class.java)
+                                        
+                                        if (data != null && data.enabled == true && !data.prompts.isNullOrEmpty()) {
+                                            Utils.mainThread.postDelayed({
+                                                try {
+                                                    val bottomSheet = OnboardingBottomSheet()
+                                                    bottomSheet.targetGuildId = guildId
+                                                    bottomSheet.show(Utils.appActivity.supportFragmentManager, "OnboardingUI")
+                                                } catch (e: Throwable) {}
+                                            }, 1500)
                                         }
                                     }
                                 }
-                            } catch (e: Exception) {
-                                // Ignore background loop errors
                             }
+                        } catch (e: Exception) {
+                            // Silent fallback
                         }
                     }
-                )
-            } else {
-                Utils.showToast("Could not find suitable UI method to hook for Auto-Popup")
-            }
+                }
+            )
         } catch (e: Throwable) {
-            Utils.showToast("Auto-Popup Patch Failed: ${e.message}")
+            Utils.showToast("Auto-Popup Hook Failed: ${e.message}")
         }
     }
 
