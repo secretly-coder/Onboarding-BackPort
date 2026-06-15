@@ -14,38 +14,19 @@ class OnboardingBackPort : Plugin() {
             "testonboarding",
             "Test the Custom Onboarding UI for the current server",
             emptyList()
-        ) { ctx ->
-            val guildId = ctx.channel?.let { it.guildId }
-            
-            if (guildId == null || guildId == 0L) {
-                return@registerCommand CommandsAPI.CommandResult(
-                    "You must use this command inside a server.",
-                    null,
-                    false
-                )
-            }
-
+        ) { 
+            // 1 Pura second delay
             com.aliucord.Utils.mainThread.postDelayed({
                 try {
-                    com.aliucord.Utils.showToast("1. Triggering UI...")
-                    
-                    // FIX: Using the bulletproof Android Bundle method to pass data
-                    val bottomSheet = OnboardingBottomSheet().apply {
-                        arguments = android.os.Bundle().apply {
-                            putString("guildId", guildId.toString())
-                        }
-                    }
-                    
-                    // FIX: Using showNow() forces synchronous execution, preventing drops
-                    bottomSheet.showNow(com.aliucord.Utils.appActivity.supportFragmentManager, "OnboardingUI")
-                    
-                    com.aliucord.Utils.showToast("2. UI Show Commanded!")
+                    val bottomSheet = OnboardingBottomSheet()
+                    // Normal show() use kar rahe hain ab
+                    bottomSheet.show(com.aliucord.Utils.appActivity.supportFragmentManager, "OnboardingUI")
                 } catch (e: Throwable) {
                     com.aliucord.Utils.showToast("Crash: ${e.message}")
                 }
-            }, 300)
+            }, 1000)
 
-            CommandsAPI.CommandResult("Opening Onboarding UI...", null, false)
+            CommandsAPI.CommandResult("Testing Basic UI...", null, false)
         }
     }
 
