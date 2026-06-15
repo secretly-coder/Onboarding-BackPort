@@ -21,7 +21,7 @@ class OnboardingBackPort : Plugin() {
 
     override fun start(context: Context) {
 
-        // 1. Manual Slash Command (Backup ke liye chhod dete hain)
+        // 1. Slash Command (Backup)
         commands.registerCommand(
             "testonboarding",
             "Manually force open Onboarding UI",
@@ -32,43 +32,41 @@ class OnboardingBackPort : Plugin() {
                 return@registerCommand CommandsAPI.CommandResult("Not in a server", null, false)
             }
 
-            com.aliucord.Utils.mainThread.postDelayed({
+            Utils.mainThread.postDelayed({
                 try {
                     val bottomSheet = OnboardingBottomSheet() 
                     bottomSheet.targetGuildId = guildId.toString() 
-                    bottomSheet.show(com.aliucord.Utils.appActivity.supportFragmentManager, "OnboardingUI")
+                    bottomSheet.show(Utils.appActivity.supportFragmentManager, "OnboardingUI")
                 } catch (e: Throwable) {}
-            }, 1000)
+            }, 500)
 
             CommandsAPI.CommandResult("Opening Onboarding...", null, false)
         }
 
-        // 2. THE SERVER MENU BUTTON INJECTION (The Literal W Idea)
+        // 2. SERVER PROFILE BUTTON INJECTION (The Real Deal)
         try {
-            // Hum Discord ke "Server Profile Sheet" ko hook kar rahe hain
             val sheetClass = Class.forName("com.discord.widgets.guilds.profile.WidgetGuildProfileSheet")
             
-            // Smart scanner jo automatically sahi method dhoondh lega bina crash hue
-            val targetMethod = sheetClass.declaredMethods.firstOrNull {
-                it.name.contains("onView") && it.parameterTypes.isNotEmpty() && it.parameterTypes[0] == View::class.java
-            }
+            // Aliucord me configureUI sabse stable target hota hai UI inject karne ke liye
+            val configureUiMethod = sheetClass.declaredMethods.find { it.name == "configureUI" }
 
-            if (targetMethod != null) {
+            if (configureUiMethod != null) {
                 patcher.patch(
-                    targetMethod,
+                    configureUiMethod,
                     Hook { callFrame ->
-                        val view = callFrame.args[0] as? View ?: return@Hook
-                        val ctx = view.context
-
-                        // Thoda delay de rahe hain taaki menu aaram se load ho jaye
+                        val sheet = callFrame.thisObject
+                        
+                        // 500ms delay taaki UI fully render ho jaye pehle
                         Utils.mainThread.postDelayed({
                             try {
-                                val linearLayout = findLinearLayout(view)
+                                val requireViewMethod = sheet.javaClass.getMethod("requireView")
+                                val view = requireViewMethod.invoke(sheet) as? View ?: return@postDelayed
+                                
+                                val linearLayout = findActionLayout(view)
+                                
                                 if (linearLayout != null) {
-                                    // Agar button pehle se hai toh dobara mat banao
                                     if (linearLayout.findViewWithTag<View>("onboarding_btn") != null) return@postDelayed
 
-                                    // Get current Server ID
                                     val storeStreamClass = Class.forName("com.discord.stores.StoreStream")
                                     val storeGuildSelected = storeStreamClass.getMethod("getGuildSelected").invoke(null)
                                     val guildIdLong = storeGuildSelected.javaClass.getMethod("get").invoke(storeGuildSelected) as Long
@@ -76,8 +74,8 @@ class OnboardingBackPort : Plugin() {
 
                                     if (guildId == "0" || guildId.isEmpty()) return@postDelayed
 
-                                    // Button UI Create kar rahe hain
-                                    val btn = Button(ctx).apply {
+                                    // Default Gray checking state
+                                    val btn = Button(view.context).apply {
                                         tag = "onboarding_btn"
                                         text = "Checking Onboarding..."
                                         setTextColor(Color.WHITE)
@@ -89,9 +87,9 @@ class OnboardingBackPort : Plugin() {
                                         isAllCaps = false
                                     }
 
-                                    linearLayout.addView(btn, 0) // Menu me sabse upar add hoga
+                                    linearLayout.addView(btn, 0)
 
-                                    // Background me chup-chaap API se status puchte hain
+                                    // Background API Check
                                     Utils.threadPool.execute {
                                         try {
                                             val request = Http.Request.newDiscordRequest("/guilds/$guildId/onboarding")
@@ -101,10 +99,9 @@ class OnboardingBackPort : Plugin() {
                                                 val data = response.json(OnboardingResponse::class.java)
                                                 
                                                 if (data != null && data.enabled == true && !data.prompts.isNullOrEmpty()) {
-                                                    // GREEN STATUS: Onboarding Available
                                                     Utils.mainThread.post {
                                                         btn.text = "Server Onboarding (Click to Setup)"
-                                                        btn.setBackgroundColor(Color.parseColor("#43B581")) // Discord Green
+                                                        btn.setBackgroundColor(Color.parseColor("#43B581")) // Green
                                                         btn.setOnClickListener {
                                                             val bottomSheet = OnboardingBottomSheet()
                                                             bottomSheet.targetGuildId = guildId
@@ -112,43 +109,36 @@ class OnboardingBackPort : Plugin() {
                                                         }
                                                     }
                                                 } else {
-                                                    // RED STATUS: Onboarding Disabled
                                                     Utils.mainThread.post {
                                                         btn.text = "Onboarding Disabled"
-                                                        btn.setBackgroundColor(Color.parseColor("#F04747")) // Discord Red
+                                                        btn.setBackgroundColor(Color.parseColor("#F04747")) // Red
                                                         btn.isEnabled = false
                                                     }
                                                 }
                                             } else {
-                                                // ERROR STATUS
-                                                Utils.mainThread.post {
-                                                    btn.text = "No Permission to view Onboarding"
-                                                    btn.setBackgroundColor(Color.parseColor("#F04747"))
-                                                    btn.isEnabled = false
-                                                }
+                                                Utils.mainThread.post { linearLayout.removeView(btn) }
                                             }
                                         } catch (e: Exception) {
-                                            // Error aaye toh button hata do taaki app ganda na lage
                                             Utils.mainThread.post { linearLayout.removeView(btn) }
                                         }
                                     }
                                 }
                             } catch (e: Throwable) {}
-                        }, 200)
+                        }, 500)
                     }
                 )
             }
-        } catch (e: Throwable) {
-            Utils.showToast("Menu Hook Failed: ${e.message}")
-        }
+        } catch (e: Throwable) {}
     }
 
-    // Ye recursive function ensure karega ki button ekdum sahi layout container me ghuse
-    private fun findLinearLayout(view: View): LinearLayout? {
-        if (view is LinearLayout) return view
+    // Helper function to dynamically find the correct UI container
+    private fun findActionLayout(view: View): LinearLayout? {
+        if (view is LinearLayout && view.orientation == LinearLayout.VERTICAL && view.childCount > 1) {
+            return view
+        }
         if (view is ViewGroup) {
             for (i in 0 until view.childCount) {
-                val found = findLinearLayout(view.getChildAt(i))
+                val found = findActionLayout(view.getChildAt(i))
                 if (found != null) return found
             }
         }
