@@ -1,6 +1,7 @@
 package com.aliucord.plugins.onboarding
 
 import android.content.Context
+import android.os.Bundle
 import com.aliucord.annotations.AliucordPlugin
 import com.aliucord.api.CommandsAPI
 import com.aliucord.entities.Plugin
@@ -14,19 +15,31 @@ class OnboardingBackPort : Plugin() {
             "testonboarding",
             "Test the Custom Onboarding UI for the current server",
             emptyList()
-        ) { 
-            // 1 Pura second delay
+        ) { ctx ->
+            val guildId = ctx.channel?.let { it.guildId }
+            
+            if (guildId == null || guildId == 0L) {
+                return@registerCommand CommandsAPI.CommandResult(
+                    "You must use this command inside a server.",
+                    null,
+                    false
+                )
+            }
+
             com.aliucord.Utils.mainThread.postDelayed({
                 try {
-                    val bottomSheet = OnboardingBottomSheet()
-                    // Normal show() use kar rahe hain ab
+                    val bottomSheet = OnboardingBottomSheet().apply {
+                        arguments = Bundle().apply {
+                            putString("guildId", guildId.toString())
+                        }
+                    }
                     bottomSheet.show(com.aliucord.Utils.appActivity.supportFragmentManager, "OnboardingUI")
                 } catch (e: Throwable) {
                     com.aliucord.Utils.showToast("Crash: ${e.message}")
                 }
             }, 1000)
 
-            CommandsAPI.CommandResult("Testing Basic UI...", null, false)
+            CommandsAPI.CommandResult("Opening Onboarding UI...", null, false)
         }
     }
 
