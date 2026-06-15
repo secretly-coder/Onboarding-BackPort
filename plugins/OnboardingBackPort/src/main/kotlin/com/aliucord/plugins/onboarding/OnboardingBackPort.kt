@@ -1,10 +1,10 @@
 package com.aliucord.plugins.onboarding
 
 import android.content.Context
-import com.aliucord.Http
 import com.aliucord.annotations.AliucordPlugin
 import com.aliucord.api.CommandsAPI
 import com.aliucord.entities.Plugin
+import com.aliucord.plugins.onboarding.ui.OnboardingBottomSheet
 
 @AliucordPlugin
 class OnboardingBackPort : Plugin() {
@@ -12,28 +12,26 @@ class OnboardingBackPort : Plugin() {
     override fun start(context: Context) {
         commands.registerCommand(
             "testonboarding",
-            "Force test the Discord API directly",
+            "Test the Custom Onboarding UI for the current server",
             emptyList()
         ) { ctx ->
-            val guildId = ctx.channel?.let { it.guildId } 
+            val guildId = ctx.channel?.let { it.guildId }
             
             if (guildId == null || guildId == 0L) {
-                return@registerCommand CommandsAPI.CommandResult("Not in a server.", null, false)
+                return@registerCommand CommandsAPI.CommandResult("Not in a server", null, false)
             }
 
-            try {
-                // Testing if the API is actually returning data or throwing an unhandled exception
-                val request = Http.Request.newDiscordRequest("/guilds/$guildId/onboarding")
-                val response = request.execute()
-                
-                // If it succeeds, it will print the exact JSON data in chat
-                val resultText = "Status: ${response.statusCode}\nData: ${response.text().take(500)}..."
-                return@registerCommand CommandsAPI.CommandResult(resultText, null, false)
-                
-            } catch (e: Exception) {
-                // If it fails, we will finally see the EXACT error
-                return@registerCommand CommandsAPI.CommandResult("API CRASHED: ${e.message}", null, false)
-            }
+            com.aliucord.Utils.mainThread.postDelayed({
+                try {
+                    val bottomSheet = OnboardingBottomSheet() 
+                    bottomSheet.targetGuildId = guildId.toString() 
+                    bottomSheet.show(com.aliucord.Utils.appActivity.supportFragmentManager, "OnboardingUI")
+                } catch (e: Throwable) {
+                    com.aliucord.Utils.showToast("Launch Error: ${e.message}")
+                }
+            }, 1500)
+
+            CommandsAPI.CommandResult("Opening Onboarding...", null, false)
         }
     }
 

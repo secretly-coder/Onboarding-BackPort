@@ -15,13 +15,12 @@ import com.aliucord.plugins.onboarding.models.OnboardingResponse
 import com.aliucord.plugins.onboarding.models.SubmitOnboardingRequest
 import com.aliucord.widgets.BottomSheet
 
-// ZERO constructor parameters. Android will never reject this.
 class OnboardingBottomSheet : BottomSheet() {
 
-    // The data is passed here right before showing the UI
     var targetGuildId: String = "" 
     
     private lateinit var container: LinearLayout
+    private val selectedOptionIds = mutableSetOf<String>()
 
     override fun onViewCreated(view: View, bundle: Bundle?) {
         super.onViewCreated(view, bundle)
@@ -78,8 +77,11 @@ class OnboardingBottomSheet : BottomSheet() {
                 if (response.statusCode == 200) {
                     val data = response.json(OnboardingResponse::class.java)
                     Utils.mainThread.post {
-                        if (data != null && data.enabled) renderOnboardingUI(data)
-                        else showError("Onboarding is not enabled for this server.")
+                        if (data != null && data.prompts != null) {
+                            renderOnboardingUI(data)
+                        } else {
+                            showError("Onboarding data is empty or invalid.")
+                        }
                     }
                 } else {
                     Utils.mainThread.post { showError("Failed to fetch. Code: ${response.statusCode}") }
@@ -102,13 +104,12 @@ class OnboardingBottomSheet : BottomSheet() {
         }
         container.addView(header)
 
-        val selectedOptionIds = mutableSetOf<String>()
-
         data.prompts?.forEach { prompt ->
-            if (prompt.in_onboarding != true) return@forEach
+            val promptTitleStr = prompt.title ?: "Question"
+            val isRequiredStr = if (prompt.required == true) " *" else ""
 
             val promptTitle = TextView(context).apply {
-                text = prompt.title + if (prompt.required) " *" else ""
+                text = promptTitleStr + isRequiredStr
                 textSize = 16f
                 setTextColor(Color.WHITE)
                 typeface = Typeface.DEFAULT_BOLD
@@ -118,14 +119,17 @@ class OnboardingBottomSheet : BottomSheet() {
 
             prompt.options?.forEach { option ->
                 val checkBox = CheckBox(context).apply {
-                    text = option.title
+                    text = option.title ?: "Option"
                     textSize = 15f
                     setTextColor(Color.LTGRAY)
                     setPadding(10, 10, 10, 10)
 
                     setOnCheckedChangeListener { _, isChecked ->
-                        if (isChecked) selectedOptionIds.add(option.id)
-                        else selectedOptionIds.remove(option.id)
+                        val optId = option.id
+                        if (optId != null) {
+                            if (isChecked) selectedOptionIds.add(optId)
+                            else selectedOptionIds.remove(optId)
+                        }
                     }
                 }
                 container.addView(checkBox)
@@ -140,7 +144,10 @@ class OnboardingBottomSheet : BottomSheet() {
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { setMargins(0, 60, 0, 20) }
             
-            setOnClickListener { submitAnswers(data.guild_id, selectedOptionIds) }
+            setOnClickListener { 
+                val guildIdToSubmit = data.guild_id ?: targetGuildId
+                submitAnswers(guildIdToSubmit, selectedOptionIds) 
+            }
         }
 
         container.addView(submitButton)
