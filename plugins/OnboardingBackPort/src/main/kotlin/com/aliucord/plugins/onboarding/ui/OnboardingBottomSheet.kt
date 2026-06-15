@@ -118,8 +118,21 @@ class OnboardingBottomSheet : BottomSheet() {
             container.addView(promptTitle)
 
             prompt.options?.forEach { option ->
+                
+                // NEW: EMOJI PARSING LOGIC
+                var emojiStr = ""
+                val emojiObj = option.emoji
+                if (emojiObj != null && emojiObj.name != null) {
+                    emojiStr = if (emojiObj.id == null) {
+                        "${emojiObj.name} " // Normal Unicode emoji
+                    } else {
+                        ":${emojiObj.name}: " // Custom server emoji
+                    }
+                }
+
                 val checkBox = CheckBox(context).apply {
-                    text = option.title ?: "Option"
+                    // Applied emoji to the text
+                    text = emojiStr + (option.title ?: "Option")
                     textSize = 15f
                     setTextColor(Color.LTGRAY)
                     setPadding(10, 10, 10, 10)
@@ -164,10 +177,15 @@ class OnboardingBottomSheet : BottomSheet() {
                     if (response.statusCode in 200..299) {
                         Utils.showToast("Onboarding Completed!")
                         dismiss()
-                    } else Utils.showToast("Submission failed. Code: ${response.statusCode}")
+                    } else {
+                        // NEW: Exposing the exact error Discord throws at us
+                        val errorText = response.text()?.take(100) ?: "Unknown Reason"
+                        Utils.showToast("Failed Code ${response.statusCode}: $errorText")
+                    }
                 }
-            } catch (e: Exception) {
-                Utils.mainThread.post { Utils.showToast("Network error during submission.") }
+            } catch (e: Throwable) {
+                // NEW: Exposing internal Android/Aliucord wrapper errors
+                Utils.mainThread.post { Utils.showToast("Crash Error: ${e.message}") }
             }
         }
     }
