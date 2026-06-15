@@ -1,1 +1,1 @@
-// This file is intentionally left blank. Master config handles everything.
+version = "1.0.0"
