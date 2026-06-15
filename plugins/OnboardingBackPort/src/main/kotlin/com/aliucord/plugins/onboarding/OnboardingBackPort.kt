@@ -25,11 +25,15 @@ class OnboardingBackPort : Plugin() {
                 )
             }
 
-            com.aliucord.Utils.threadPool.execute {
-                val bottomSheet = OnboardingBottomSheet(guildId.toString())
-                // FIX: Used the correct FragmentManager for Aliucord
-                val fragmentManager = com.aliucord.Utils.appActivity.supportFragmentManager
-                bottomSheet.show(fragmentManager, "OnboardingUI")
+            // FIX: Use mainThread.post instead of threadPool.execute for UI operations
+            com.aliucord.Utils.mainThread.post {
+                try {
+                    val bottomSheet = OnboardingBottomSheet(guildId.toString())
+                    val fragmentManager = com.aliucord.Utils.appActivity.supportFragmentManager
+                    bottomSheet.show(fragmentManager, "OnboardingUI")
+                } catch (e: Exception) {
+                    com.aliucord.Utils.showToast("Error opening UI: ${e.message}")
+                }
             }
 
             CommandsAPI.CommandResult("Opening Onboarding UI...", null, false)
